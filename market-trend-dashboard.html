@@ -246,6 +246,15 @@
   #calcResult .value{ font-size: 15px; font-weight: 600; margin-bottom: 6px; }
   #calcResult .sub{ color: var(--text-muted); font-size: 12.5px; margin-bottom: 4px; }
 
+  .cot-card{
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 18px; margin-bottom: 18px;
+  }
+  .cot-card h3{ font-size: 14px; margin-bottom: 4px; }
+  .cot-meta{ color: var(--text-faint); font-size: 12px; margin-bottom: 12px; }
+  .cot-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 760px){ .cot-grid{ grid-template-columns: 1fr; } }
+
   .footnote{ color: var(--text-faint); font-size: 11.5px; margin-top: 30px; line-height: 1.7; }
 </style>
 </head>
@@ -265,6 +274,19 @@ const SUPABASE_ANON_KEY = "YOUR-ANON-KEY";
 const TWELVEDATA_API_KEY = "YOUR-TWELVEDATA-KEY";</pre>
     <p>บันทึกไฟล์แล้วเปิดใหม่ (หรืออัปโหลดขึ้น GitHub Pages เหมือนแดชบอร์ดสต๊อกสินค้า) — ระบบจะตรวจสอบอัตโนมัติและซ่อนหน้านี้เมื่อกรอกครบ</p>
   </div>
+  <div class="card">
+    <h2>ส่วนเสริม (ไม่บังคับ): CME Futures + COT Report</h2>
+    <p><b>COT Report (Commitment of Traders):</b> ใช้งานได้ทันที ไม่ต้องตั้งค่าเพิ่ม — ดึงข้อมูลฟรีจาก CFTC โดยตรง จะขึ้นให้อัตโนมัติเมื่อสัญลักษณ์ที่เลือกมีข้อมูล COT ตรงกัน (ทองคำ, เงิน, น้ำมันดิบ WTI, ก๊าซธรรมชาติ, คู่เงินหลัก, S&amp;P 500 E-mini, Nasdaq E-mini) — รันเพิ่มตาราง <code>cot_cache</code> ตาม schema-additions.sql ที่แนบมาก่อน</p>
+    <p><b>ราคา Futures (เช่น Gold GC, Euro FX 6E, Crude Oil CL):</b> Twelve Data ไม่มีข้อมูล futures ของ CME ให้ ต้องตั้งค่า Supabase Edge Function เป็นตัวกลางไปดึงจาก Yahoo Finance แทน (ไม่บังคับ — ถ้าข้ามขั้นตอนนี้ ส่วนอื่นของแดชบอร์ดยังใช้งานได้ปกติ เพียงแต่จะเพิ่มสัญลักษณ์ futures ไม่ได้):</p>
+    <ol>
+      <li>ติดตั้ง Supabase CLI (<code>npm install -g supabase</code>) แล้ว login + link กับโปรเจกต์เดิม (<code>supabase login</code>, <code>supabase link --project-ref YOUR-PROJECT-REF</code>)</li>
+      <li>สร้างโฟลเดอร์ฟังก์ชัน แล้ววางไฟล์ <code>futures-proxy/index.ts</code> ที่แนบมาไว้ที่ <code>supabase/functions/futures-proxy/index.ts</code></li>
+      <li>Deploy: <code>supabase functions deploy futures-proxy</code></li>
+      <li>คัดลอก URL ฟังก์ชันที่ได้ (รูปแบบ <code>https://YOUR-PROJECT-REF.supabase.co/functions/v1/futures-proxy</code>) มาใส่ในค่าคงที่ <code>FUTURES_PROXY_URL</code> ใกล้ท้ายไฟล์นี้</li>
+    </ol>
+    <p>เมื่อตั้งค่าแล้ว เพิ่มสัญลักษณ์ futures ในรายการเฝ้าดูได้โดยใช้รหัสสัญญา เช่น <code>GC</code> (ทองคำ), <code>SI</code> (เงิน), <code>CL</code> (น้ำมันดิบ WTI), <code>NG</code> (ก๊าซธรรมชาติ), <code>6E</code> (Euro FX), <code>6B</code> (GBP), <code>6J</code> (JPY), <code>6A</code> (AUD), <code>6C</code> (CAD), <code>6S</code> (CHF), <code>6N</code> (NZD), <code>ES</code>/<code>MES</code> (S&amp;P 500), <code>NQ</code>/<code>MNQ</code> (Nasdaq) — ระบบจะรู้จักอัตโนมัติว่าเป็น futures และไปดึงผ่าน Edge Function แทน Twelve Data</p>
+    <p style="color:var(--amber);">หมายเหตุ: ราคา futures มาจาก Yahoo Finance (แหล่งข้อมูลสาธารณะที่ไม่เป็นทางการ ดีเลย์ ไม่รับประกัน uptime) ผ่าน Edge Function ที่คุณเป็นคนดูแลเอง — ไม่ใช่ real-time feed จาก CME โดยตรง ช่วงเวลา 4 ชั่วโมงคำนวณจากการรวมแท่ง 1 ชั่วโมงเอง (ไม่ใช่แท่ง 4h จริงจากตลาด) ส่วน Volume/Open Interest ของ CME ไม่มีแหล่งข้อมูลฟรีที่ดึงตรงได้ (ต้องใช้ CME DataMine แบบเสียเงิน) จึงยังไม่รวมไว้ในเวอร์ชันนี้</p>
+  </div>
 </div>
 
 <div class="app" id="app" hidden>
@@ -275,7 +297,7 @@ const TWELVEDATA_API_KEY = "YOUR-TWELVEDATA-KEY";</pre>
       <input id="newSymbol" placeholder="เช่น XAU/USD, EUR/USD, AAPL" autocomplete="off" required>
       <input id="newLabel" placeholder="ชื่อเล่น (ไม่บังคับ) เช่น ทองคำ" autocomplete="off">
       <button type="submit">+ เพิ่มในรายการเฝ้าดู</button>
-      <small>รูปแบบสัญลักษณ์ตาม Twelve Data — คู่เงิน/ทองคำใช้ "/" เช่น XAU/USD, หุ้นพิมพ์ตัวย่อเฉย ๆ เช่น AAPL</small>
+      <small>รูปแบบสัญลักษณ์ตาม Twelve Data — คู่เงิน/ทองคำใช้ "/" เช่น XAU/USD, หุ้นพิมพ์ตัวย่อเฉย ๆ เช่น AAPL หรือใช้รหัส Futures ของ CME เช่น GC, SI, CL, NG, 6E, 6B, 6J, 6A, 6C, ES, NQ (ต้องตั้งค่า Futures Proxy ก่อน — ดูหน้าตั้งค่า)</small>
     </form>
 
     <div class="watchlist" id="watchlist">
@@ -330,6 +352,12 @@ const TWELVEDATA_API_KEY = "YOUR-TWELVEDATA-KEY";</pre>
 
   <div class="chart-card"><canvas id="priceChart"></canvas></div>
   <div class="sr-info" id="srInfo"></div>
+
+  <div class="cot-card" id="cotCard" hidden>
+    <h3>COT Report — Commitment of Traders (CFTC)</h3>
+    <div class="cot-meta" id="cotMeta"></div>
+    <div class="cot-grid" id="cotGrid"></div>
+  </div>
 
   <div class="cards-grid">
     <div class="stat-card">
@@ -397,8 +425,9 @@ const TWELVEDATA_API_KEY = "YOUR-TWELVEDATA-KEY";</pre>
   </div>
 
   <div class="footnote">
-    ข้อมูลราคาจาก Twelve Data (ดีเลย์ตามแผนบัญชีฟรี ไม่ใช่ real-time แบบโบรกเกอร์) แคชไว้ใน Supabase เพื่อลดจำนวนการเรียก API —
-    ตัวเลขทั้งหมดคำนวณจากราคาปิดที่ดึงมาได้เท่านั้น ไม่ใช่คำแนะนำการลงทุน โปรดใช้ประกอบการตัดสินใจร่วมกับข้อมูลอื่น
+    ข้อมูลราคาสัญลักษณ์ spot/หุ้นจาก Twelve Data, ราคา Futures (ถ้าตั้งค่าไว้) จาก Yahoo Finance ผ่าน Edge Function ของคุณเอง — ทั้งคู่ดีเลย์ ไม่ใช่ real-time แบบโบรกเกอร์ แคชไว้ใน Supabase เพื่อลดจำนวนการเรียก API
+    ข้อมูล COT Report จาก CFTC เผยแพร่ทุกวันศุกร์และดีเลย์ราว 3-6 วันตามธรรมชาติของรายงาน (ไม่ใช่ real-time) —
+    ตัวเลขทั้งหมดคำนวณจากข้อมูลที่ดึงมาได้เท่านั้น ไม่ใช่คำแนะนำการลงทุน โปรดใช้ประกอบการตัดสินใจร่วมกับข้อมูลอื่น
   </div>
 </template>
 
@@ -416,6 +445,12 @@ const TWELVEDATA_API_KEY = "6ba15c53c858468daec56383078a4f92";
 const TELEGRAM_BOT_TOKEN = "8914131256:AAE7c0Bw8-HK7KITv7shFappIPc1ZqNgLn0";
 const TELEGRAM_CHAT_ID = "6297006234";
 const telegramConfigured = !TELEGRAM_BOT_TOKEN.includes("YOUR-TELEGRAM-BOT-TOKEN");
+
+// Futures proxy — optional. A Supabase Edge Function you deploy yourself that re-serves Yahoo
+// Finance futures quotes with CORS headers (Twelve Data has no CME futures coverage at any tier).
+// Leave blank to skip; the rest of the dashboard (spot symbols, COT report) works fine without it.
+// See the setup guide's "ส่วนเสริม" card and futures-proxy/index.ts for deployment steps.
+const FUTURES_PROXY_URL = ""; // e.g. "https://YOUR-PROJECT-REF.supabase.co/functions/v1/futures-proxy"
 
 const isConfigured = !SUPABASE_URL.includes("YOUR-PROJECT")
   && !SUPABASE_ANON_KEY.includes("YOUR-ANON-KEY")
@@ -630,6 +665,84 @@ if(isConfigured){
     return symbol;
   }
 
+  // ==================================================================
+  // CME Futures via Supabase Edge Function proxy (optional — see FUTURES_PROXY_URL).
+  // Twelve Data has no CME futures coverage at any plan tier, so futures symbols are routed
+  // through a separate proxy (your own Edge Function re-serving Yahoo Finance with CORS
+  // headers) instead of Twelve Data. Bars land in the same `price_bars` table/shape as spot
+  // data, so every indicator/chart/signal-card function downstream is reused unchanged.
+  // ==================================================================
+  const FUTURES_SYMBOL_MAP = {
+    'GC':'GC=F', 'MGC':'MGC=F', 'SI':'SI=F', 'SIL':'SI=F', 'CL':'CL=F', 'QM':'QM=F', 'NG':'NG=F',
+    '6E':'6E=F', '6B':'6B=F', '6J':'6J=F', '6A':'6A=F', '6C':'6C=F', '6S':'6S=F', '6N':'6N=F',
+    'ES':'ES=F', 'MES':'MES=F', 'NQ':'NQ=F', 'MNQ':'MNQ=F', 'YM':'YM=F', 'RTY':'RTY=F',
+  };
+  function isFuturesSymbol(symbol){
+    const s = symbol.toUpperCase();
+    return FUTURES_SYMBOL_MAP.hasOwnProperty(s) || /=F$/.test(s);
+  }
+  function toYahooSymbol(symbol){
+    const s = symbol.toUpperCase();
+    return FUTURES_SYMBOL_MAP[s] || s; // allow typing a raw Yahoo code like "ZB=F" directly
+  }
+
+  const YF_INTERVAL_MAP = { '15min':'15m', '1h':'60m', '1day':'1d' }; // Yahoo has no native 4h bar
+  const YF_RANGE_MAP    = { '15min':'5d', '1h':'2mo', '1day':'2y' };
+
+  // Yahoo's chart API doesn't offer a 4h bar — build it by grouping consecutive 1h bars into
+  // UTC-aligned 4h buckets (00/04/08/12/16/20). Approximate vs. an exchange-native 4h candle,
+  // but consistent with everything else that reads from `bars` downstream.
+  function resampleTo4h(bars){
+    const buckets = new Map();
+    for(const b of bars){
+      const d = new Date(b.time);
+      const bucketHour = Math.floor(d.getUTCHours()/4)*4;
+      const key = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), bucketHour)).toISOString();
+      if(!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(b);
+    }
+    return [...buckets.entries()].sort((a,b) => a[0].localeCompare(b[0])).map(([key, group]) => ({
+      time: key,
+      open: group[0].open,
+      high: Math.max(...group.map(g=>g.high)),
+      low: Math.min(...group.map(g=>g.low)),
+      close: group[group.length-1].close,
+      volume: group.some(g=>g.volume!=null) ? group.reduce((s,g)=>s+(g.volume||0),0) : null,
+    }));
+  }
+
+  async function fetchAndCacheFutures(symbol, interval, outputsize){
+    if(!FUTURES_PROXY_URL){
+      throw new Error('ยังไม่ได้ตั้งค่า Futures Proxy — ดูวิธีตั้งค่าใน "ส่วนเสริม" บนหน้าตั้งค่า (setup guide) ก่อนเพิ่มสัญลักษณ์ futures');
+    }
+    const yahooSymbol = toYahooSymbol(symbol);
+    const yfInterval = interval === '4h' ? '60m' : YF_INTERVAL_MAP[interval];
+    const range = interval === '4h' ? '3mo' : YF_RANGE_MAP[interval];
+    const url = `${FUTURES_PROXY_URL}?symbol=${encodeURIComponent(yahooSymbol)}&interval=${yfInterval}&range=${range}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, apikey: SUPABASE_ANON_KEY }
+    });
+    const json = await res.json();
+    if(!res.ok || json.error){
+      throw new Error('Futures proxy: ' + (json.error || `HTTP ${res.status}`));
+    }
+    if(!json.bars || !json.bars.length){
+      throw new Error('ไม่พบข้อมูล futures สำหรับสัญลักษณ์นี้ — ตรวจสอบรหัส เช่น GC, SI, CL, NG, 6E, 6B, 6J, 6A, 6C, ES, NQ');
+    }
+    let bars = json.bars;
+    if(interval === '4h') bars = resampleTo4h(bars);
+    bars = bars.slice(-outputsize);
+    const nowIso = new Date().toISOString();
+    const rows = bars.map(b => ({
+      symbol, interval, bar_time: b.time,
+      open: b.open, high: b.high, low: b.low, close: b.close,
+      volume: b.volume != null ? b.volume : null,
+      fetched_at: nowIso,
+    }));
+    const { error } = await sb.from('price_bars').upsert(rows, { onConflict: 'symbol,interval,bar_time' });
+    if(error) throw error;
+  }
+
   async function fetchAndCache(symbol, interval, outputsize){
     const apiSymbol = toApiSymbol(symbol);
     const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(apiSymbol)}`
@@ -665,7 +778,8 @@ if(isConfigured){
       needFetch = !isFresh;
     }
     if(needFetch){
-      await fetchAndCache(symbol, interval, meta.outputsize);
+      if(isFuturesSymbol(symbol)) await fetchAndCacheFutures(symbol, interval, meta.outputsize);
+      else await fetchAndCache(symbol, interval, meta.outputsize);
     }
     const { data: rows, error } = await sb.from('price_bars')
       .select('*').eq('symbol', symbol).eq('interval', interval)
@@ -777,6 +891,149 @@ if(isConfigured){
     listEl.innerHTML = signal.checks.map(c =>
       `<span class="item ${c.pass?'pass':'fail'}">${c.pass?'✓':'✕'} ${c.label}</span>`
     ).join('');
+  }
+
+  // ==================================================================
+  // COT Report (Commitment of Traders) — free, direct from the CFTC's public Socrata API
+  // (publicreporting.cftc.gov), no key required, CORS-enabled. Two report families cover what
+  // this dashboard's symbols need: "Disaggregated" for physical commodities (gold/silver/energy)
+  // and "Traders in Financial Futures" (TFF) for currencies/equity indices. Cached in Supabase
+  // (cot_cache table — see schema-additions.sql) since the report only updates weekly.
+  // ==================================================================
+  const COT_DATASET = { disaggregated: '72hh-3qpy', tff: 'gpe5-46if' };
+  const COT_MAP = {
+    GOLD:   { names:['GOLD - COMMODITY EXCHANGE INC.'], kind:'disaggregated', label:'ทองคำ (Gold, COMEX)' },
+    SILVER: { names:['SILVER - COMMODITY EXCHANGE INC.'], kind:'disaggregated', label:'เงิน (Silver, COMEX)' },
+    CRUDE:  { names:['CRUDE OIL, LIGHT SWEET - NEW YORK MERCANTILE EXCHANGE'], kind:'disaggregated', label:'น้ำมันดิบ WTI (NYMEX)' },
+    NATGAS: { names:['NATURAL GAS - NEW YORK MERCANTILE EXCHANGE'], kind:'disaggregated', label:'ก๊าซธรรมชาติ (NYMEX)' },
+    EUR:    { names:['EURO FX - CHICAGO MERCANTILE EXCHANGE'], kind:'tff', label:'ยูโร (EUR, CME)' },
+    GBP:    { names:['BRITISH POUND - CHICAGO MERCANTILE EXCHANGE','BRITISH POUND STERLING - CHICAGO MERCANTILE EXCHANGE'], kind:'tff', label:'ปอนด์ (GBP, CME)' },
+    JPY:    { names:['JAPANESE YEN - CHICAGO MERCANTILE EXCHANGE'], kind:'tff', label:'เยน (JPY, CME)' },
+    AUD:    { names:['AUSTRALIAN DOLLAR - CHICAGO MERCANTILE EXCHANGE'], kind:'tff', label:'ดอลลาร์ออสเตรเลีย (AUD, CME)' },
+    CAD:    { names:['CANADIAN DOLLAR - CHICAGO MERCANTILE EXCHANGE'], kind:'tff', label:'ดอลลาร์แคนาดา (CAD, CME)' },
+    CHF:    { names:['SWISS FRANC - CHICAGO MERCANTILE EXCHANGE'], kind:'tff', label:'ฟรังก์สวิส (CHF, CME)' },
+    NZD:    { names:['NEW ZEALAND DOLLAR - CHICAGO MERCANTILE EXCHANGE'], kind:'tff', label:'ดอลลาร์นิวซีแลนด์ (NZD, CME)' },
+    SP500:  { names:['E-MINI S&P 500 - CHICAGO MERCANTILE EXCHANGE'], kind:'tff', label:'S&P 500 E-mini (CME)' },
+    NASDAQ: { names:['NASDAQ MINI - CHICAGO MERCANTILE EXCHANGE'], kind:'tff', label:'Nasdaq-100 Mini (CME)' },
+  };
+
+  // Maps a watchlist symbol (spot pair like "XAU/USD", futures code like "GC", or plain
+  // currency code) to a COT_MAP key. Returns null when there's no matching CFTC report.
+  function resolveCotKey(symbol){
+    const s = symbol.toUpperCase().replace(/\s+/g,'');
+    if(/^XAU/.test(s) || s==='GC' || s==='MGC') return 'GOLD';
+    if(/^XAG/.test(s) || s==='SI' || s==='SIL') return 'SILVER';
+    if(s==='CL' || s==='QM' || /^(WTI|USOIL)/.test(s)) return 'CRUDE';
+    if(s==='NG') return 'NATGAS';
+    if(/^EUR/.test(s) || s==='6E') return 'EUR';
+    if(/^GBP/.test(s) || s==='6B') return 'GBP';
+    if(/JPY/.test(s) || s==='6J') return 'JPY';
+    if(/^AUD/.test(s) || s==='6A') return 'AUD';
+    if(/CAD/.test(s) || s==='6C') return 'CAD';
+    if(/CHF/.test(s) || s==='6S') return 'CHF';
+    if(/^NZD/.test(s) || s==='6N') return 'NZD';
+    if(s==='ES' || s==='MES' || /^(SPX|US500)/.test(s)) return 'SP500';
+    if(s==='NQ' || s==='MNQ' || /^(NAS100|USTEC)/.test(s)) return 'NASDAQ';
+    return null;
+  }
+
+  async function fetchCotRows(mapping){
+    const dataset = COT_DATASET[mapping.kind];
+    const whereNames = mapping.names.map(n => `market_and_exchange_names='${n.replace(/'/g,"''")}'`).join(' OR ');
+    const url = `https://publicreporting.cftc.gov/resource/${dataset}.json`
+      + `?$where=${encodeURIComponent('(' + whereNames + ')')}`
+      + `&$order=report_date_as_yyyy_mm_dd DESC&$limit=2`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('CFTC API: HTTP ' + res.status);
+    return await res.json();
+  }
+
+  function computeCotSummary(rows, kind){
+    const num = v => (v==null ? null : parseFloat(v));
+    const latest = rows[0], prevRow = rows[1];
+    const specLongKey  = kind==='disaggregated' ? 'm_money_positions_long_all'  : 'lev_money_positions_long';
+    const specShortKey = kind==='disaggregated' ? 'm_money_positions_short_all' : 'lev_money_positions_short';
+    const comLongKey   = kind==='disaggregated' ? 'prod_merc_positions_long'    : 'dealer_positions_long_all';
+    const comShortKey  = kind==='disaggregated' ? 'prod_merc_positions_short'   : 'dealer_positions_short_all';
+    const specLabel = kind==='disaggregated' ? 'Managed Money (กองทุน/นักเก็งกำไร)' : 'Leveraged Funds (กองทุน/นักเก็งกำไร)';
+    const comLabel  = kind==='disaggregated' ? 'Producer/Merchant (ผู้ผลิต/ผู้ใช้จริง)' : 'Dealer (ดีลเลอร์)';
+
+    const specLong = num(latest[specLongKey]), specShort = num(latest[specShortKey]);
+    const comLong  = num(latest[comLongKey]),  comShort  = num(latest[comShortKey]);
+    const specNet = (specLong!=null && specShort!=null) ? specLong - specShort : null;
+    const comNet  = (comLong!=null && comShort!=null) ? comLong - comShort : null;
+
+    let specNetChange = null;
+    if(prevRow){
+      const pLong = num(prevRow[specLongKey]), pShort = num(prevRow[specShortKey]);
+      if(specNet!=null && pLong!=null && pShort!=null) specNetChange = specNet - (pLong - pShort);
+    }
+
+    return {
+      reportDate: (latest.report_date_as_yyyy_mm_dd || '').slice(0,10),
+      contractName: latest.contract_market_name || latest.market_and_exchange_names,
+      specLabel, comLabel, specLong, specShort, specNet, comLong, comShort, comNet, specNetChange,
+      oi: num(latest.open_interest_all),
+      oiChange: num(latest.change_in_open_interest_all),
+    };
+  }
+
+  async function getCotSummary(symbol){
+    const key = resolveCotKey(symbol);
+    if(!key) return null;
+    const mapping = COT_MAP[key];
+    const cacheKey = 'COT:' + key;
+    const COT_TTL_MIN = 60 * 24; // report only updates weekly — a day of cache is generous, not stale
+
+    let rows = null;
+    if(!state.forceRefresh){
+      const { data: cached } = await sb.from('cot_cache').select('payload, fetched_at').eq('cache_key', cacheKey).maybeSingle();
+      const isFresh = cached && (Date.now() - new Date(cached.fetched_at).getTime()) < COT_TTL_MIN*60*1000;
+      if(isFresh) rows = cached.payload;
+    }
+    if(!rows){
+      rows = await fetchCotRows(mapping);
+      await sb.from('cot_cache').upsert(
+        { cache_key: cacheKey, payload: rows, fetched_at: new Date().toISOString() },
+        { onConflict: 'cache_key' }
+      );
+    }
+    if(!rows || !rows.length) return null;
+    return { ...computeCotSummary(rows, mapping.kind), mapLabel: mapping.label };
+  }
+
+  function renderCotCard(summary){
+    const card = document.getElementById('cotCard');
+    if(!card) return;
+    if(!summary){ card.hidden = true; return; }
+    card.hidden = false;
+
+    const dirOf = v => v==null ? {text:'—', cls:'neutral'} : v>0 ? {text:'Net Long', cls:'bull'} : v<0 ? {text:'Net Short', cls:'bear'} : {text:'Flat', cls:'neutral'};
+    const spec = dirOf(summary.specNet), com = dirOf(summary.comNet);
+    const changeTxt = summary.specNetChange==null ? ''
+      : summary.specNetChange >= 0 ? `เพิ่มขึ้น ${fmt(Math.abs(summary.specNetChange),0)} สัญญา จากสัปดาห์ก่อน`
+      : `ลดลง ${fmt(Math.abs(summary.specNetChange),0)} สัญญา จากสัปดาห์ก่อน`;
+
+    document.getElementById('cotMeta').textContent =
+      `${summary.mapLabel} · ${summary.contractName} · ข้อมูล ณ วันที่ ${summary.reportDate || '—'} (รายงานทุกวันศุกร์ ข้อมูลล่าช้าราว 3-6 วัน)`;
+    document.getElementById('cotGrid').innerHTML = `
+      <div class="stat-card">
+        <div class="label">${summary.specLabel}</div>
+        <div class="value"><span class="badge ${spec.cls}">${spec.text}</span></div>
+        <div class="sub">Long ${fmt(summary.specLong,0)} / Short ${fmt(summary.specShort,0)} · สุทธิ ${summary.specNet>=0?'+':''}${fmt(summary.specNet,0)}</div>
+        <div class="sub">${changeTxt}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">${summary.comLabel}</div>
+        <div class="value"><span class="badge ${com.cls}">${com.text}</span></div>
+        <div class="sub">Long ${fmt(summary.comLong,0)} / Short ${fmt(summary.comShort,0)} · สุทธิ ${summary.comNet>=0?'+':''}${fmt(summary.comNet,0)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Open Interest รวม</div>
+        <div class="value">${fmt(summary.oi,0)}</div>
+        <div class="sub">${summary.oiChange!=null ? (summary.oiChange>=0?'+':'')+fmt(summary.oiChange,0)+' สัญญา จากสัปดาห์ก่อน' : '—'}</div>
+      </div>
+    `;
   }
 
   // ==================================================================
@@ -1006,6 +1263,14 @@ if(isConfigured){
       const signal = computeEntrySignal({ ema9, ema21, ema50, rsi, macd, adxRes, atr14, atr50, mtfTrends });
       renderSignalCard(signal);
       state.lastAnalysis = { price: lastClose, atr14: last(atr14), direction: signal.direction };
+
+      try{
+        const cot = await getCotSummary(row.symbol);
+        renderCotCard(cot);
+      }catch(e){
+        console.error('COT fetch failed', e);
+        renderCotCard(null); // fail quietly — COT is a bonus panel, not core to the dashboard
+      }
 
     } catch(e){
       console.error(e);
