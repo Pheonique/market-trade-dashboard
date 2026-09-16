@@ -450,7 +450,7 @@ const telegramConfigured = !TELEGRAM_BOT_TOKEN.includes("YOUR-TELEGRAM-BOT-TOKEN
 // Finance futures quotes with CORS headers (Twelve Data has no CME futures coverage at any tier).
 // Leave blank to skip; the rest of the dashboard (spot symbols, COT report) works fine without it.
 // See the setup guide's "ส่วนเสริม" card and futures-proxy/index.ts for deployment steps.
-const FUTURES_PROXY_URL = ""; // e.g. "https://YOUR-PROJECT-REF.supabase.co/functions/v1/futures-proxy"
+const FUTURES_PROXY_URL = "https://yrfbbmgnztqqllbldytg.supabase.co/functions/v1/rapid-worker"; // e.g. "https://YOUR-PROJECT-REF.supabase.co/functions/v1/futures-proxy"
 
 const isConfigured = !SUPABASE_URL.includes("YOUR-PROJECT")
   && !SUPABASE_ANON_KEY.includes("YOUR-ANON-KEY")
