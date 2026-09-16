@@ -136,6 +136,17 @@
   .watchlist-item:hover .del{ opacity: 1; }
   .watchlist-empty{ color: var(--text-faint); font-size: 12.5px; padding: 8px 2px; }
 
+  .telegram-panel{
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+    margin-top: 4px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .telegram-panel label{ display:flex; align-items:center; gap:8px; font-size:12.5px; color: var(--text-muted); cursor:pointer; }
+  .telegram-panel .btn{ font-size:12px; padding:6px 10px; align-self:flex-start; }
+  .telegram-panel .status{ font-size:11px; color: var(--text-faint); min-height: 14px; }
+  .telegram-panel .note{ font-size:11.5px; color: var(--amber); line-height:1.5; }
+
   .main{ padding: 24px 28px 60px; max-width: 1180px; }
   .topbar{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom: 20px; }
   .topbar h2{ font-size: 20px; }
@@ -270,6 +281,12 @@ const TWELVEDATA_API_KEY = "YOUR-TWELVEDATA-KEY";</pre>
     <div class="watchlist" id="watchlist">
       <div class="watchlist-empty">กำลังโหลด...</div>
     </div>
+
+    <div class="telegram-panel" id="telegramPanel">
+      <label><input type="checkbox" id="telegramEnabled" checked> แจ้งเตือน Telegram เมื่อมีสัญญาณ BUY/SELL</label>
+      <button type="button" class="btn" id="telegramTestBtn">ส่งข้อความทดสอบ</button>
+      <div class="status" id="telegramStatus"></div>
+    </div>
   </div>
 
   <div class="main">
@@ -393,12 +410,24 @@ const SUPABASE_URL = "https://yrfbbmgnztqqllbldytg.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_VKCmg6xqauw-oM0TzHUCiw_qlI6uJnz";
 const TWELVEDATA_API_KEY = "6ba15c53c858468daec56383078a4f92";
 
+// Telegram — optional, only affects the alert feature (rest of the dashboard works without it).
+// Get TELEGRAM_BOT_TOKEN from @BotFather on Telegram (/newbot). TELEGRAM_CHAT_ID below was
+// already read from your getUpdates response (chat.id for "uritt").
+const TELEGRAM_BOT_TOKEN = "8914131256:AAE7c0Bw8-HK7KITv7shFappIPc1ZqNgLn0";
+const TELEGRAM_CHAT_ID = "6297006234";
+const telegramConfigured = !TELEGRAM_BOT_TOKEN.includes("YOUR-TELEGRAM-BOT-TOKEN");
+
 const isConfigured = !SUPABASE_URL.includes("YOUR-PROJECT")
   && !SUPABASE_ANON_KEY.includes("YOUR-ANON-KEY")
   && !TWELVEDATA_API_KEY.includes("YOUR-TWELVEDATA-KEY");
 
 document.getElementById('setupGuide').hidden = isConfigured;
 document.getElementById('app').hidden = !isConfigured;
+
+if(!telegramConfigured){
+  const tp = document.getElementById('telegramPanel');
+  if(tp) tp.innerHTML = '<div class="note">ยังไม่ได้ตั้งค่า Telegram Bot Token — กรอก TELEGRAM_BOT_TOKEN ใกล้ต้นสคริปต์ก่อนใช้งานแจ้งเตือน</div>';
+}
 
 if(isConfigured){
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -1054,10 +1083,105 @@ if(isConfigured){
     }
   }
 
+  // ==================================================================
+  // Telegram alerts — watches the WHOLE watchlist in the background
+  // (not just whichever symbol is currently open), so a BUY/SELL
+  // scorecard verdict notifies you even while looking at something
+  // else. Uses a fixed timeframe (ALERT_TF) for consistency regardless
+  // of whichever interval tab is open, and de-dupes via a small
+  // Supabase table (alert_state) keyed by symbol so the same verdict
+  // doesn't spam repeatedly and the state survives page reloads.
+  // ==================================================================
+  const ALERT_TF = '1h';
+  const ALERT_CHECK_INTERVAL_MS = 2 * 60 * 1000;
+
+  async function sendTelegramMessage(text){
+    if(!telegramConfigured) return;
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text, parse_mode: 'HTML' })
+    });
+    const json = await res.json();
+    if(!json.ok) throw new Error(json.description || 'ส่งข้อความ Telegram ไม่สำเร็จ');
+    return json;
+  }
+
+  async function getLastAlertDirection(symbol){
+    const { data } = await sb.from('alert_state').select('last_direction').eq('symbol', symbol).maybeSingle();
+    return data ? data.last_direction : null;
+  }
+
+  async function setLastAlertDirection(symbol, direction){
+    await sb.from('alert_state').upsert(
+      { symbol, last_direction: direction, updated_at: new Date().toISOString() },
+      { onConflict: 'symbol' }
+    );
+  }
+
+  async function checkWatchlistAlerts(){
+    if(!telegramConfigured) return;
+    const toggle = document.getElementById('telegramEnabled');
+    if(toggle && !toggle.checked) return;
+
+    for(const row of state.watchlist){
+      try{
+        const bars = await getBars(row.symbol, ALERT_TF);
+        const closes = bars.map(b => b.close);
+        const ema9 = calcEMAFromArray(closes, 9);
+        const ema21 = calcEMAFromArray(closes, 21);
+        const ema50 = calcEMAFromArray(closes, 50);
+        const rsi = calcRSI(closes, 14);
+        const macd = calcMACD(closes, 12, 26, 9);
+        const adxRes = calcADX(bars, 14);
+        const atr14 = calcATR(bars, 14);
+        const atr50 = calcATR(bars, 50);
+        const mtfTrends = await computeMultiTimeframeTrends(row.symbol);
+        const signal = computeEntrySignal({ ema9, ema21, ema50, rsi, macd, adxRes, atr14, atr50, mtfTrends });
+
+        const lastDir = await getLastAlertDirection(row.symbol);
+        if(signal.direction === 'bull' || signal.direction === 'bear'){
+          if(lastDir !== signal.direction){
+            const dirText = signal.direction === 'bull' ? '🟢 BUY' : '🔴 SELL';
+            const price = last(closes);
+            const label = row.label ? ` (${row.label})` : '';
+            const msg = `<b>${dirText}</b> — ${row.symbol}${label}\n${signal.verdict}\nราคาปัจจุบัน: ${fmt(price, price<10?4:2)}\nTimeframe อ้างอิง: ${TF_META[ALERT_TF].label}`;
+            await sendTelegramMessage(msg);
+            await setLastAlertDirection(row.symbol, signal.direction);
+          }
+        } else if(lastDir){
+          // trend went back to neutral/unclear — clear so a future bull/bear re-alerts fresh
+          await setLastAlertDirection(row.symbol, null);
+        }
+      }catch(e){
+        console.error('ตรวจสัญญาณแจ้งเตือนล้มเหลวสำหรับ', row.symbol, e);
+      }
+    }
+  }
+
+  const telegramTestBtn = document.getElementById('telegramTestBtn');
+  if(telegramTestBtn){
+    telegramTestBtn.addEventListener('click', async () => {
+      const statusEl = document.getElementById('telegramStatus');
+      statusEl.textContent = 'กำลังส่ง...';
+      try{
+        await sendTelegramMessage('✅ ทดสอบการแจ้งเตือนจากแดชบอร์ดแนวโน้มตลาด สำเร็จ!');
+        statusEl.textContent = 'ส่งสำเร็จ — เช็ค Telegram ของคุณได้เลย';
+      }catch(e){
+        statusEl.textContent = 'ผิดพลาด: ' + e.message;
+      }
+    });
+  }
+
   // ---------------- init ----------------
   renderSessionStrip();
   setInterval(renderSessionStrip, 60000);
   loadWatchlist();
+  if(telegramConfigured){
+    setTimeout(checkWatchlistAlerts, 5000);
+    setInterval(checkWatchlistAlerts, ALERT_CHECK_INTERVAL_MS);
+  }
 }
 </script>
 </body>
