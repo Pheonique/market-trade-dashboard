@@ -1462,6 +1462,13 @@ if(isConfigured){
     setTimeout(checkWatchlistAlerts, 5000);
     setInterval(checkWatchlistAlerts, ALERT_CHECK_INTERVAL_MS);
   }
+
+  // Auto-refresh whichever symbol/interval is currently on screen every 15 minutes, so a tab left
+  // open stays reasonably current without needing a manual click on "รีเฟรชข้อมูล" or an interval
+  // tab. Goes through the normal (non-forced) getBars() path, so it still respects each interval's
+  // own TTL — this just makes sure a check happens regularly; it doesn't force-bypass the cache.
+  const AUTO_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
+  setInterval(() => { if(state.selected) refreshSymbolData(); }, AUTO_REFRESH_INTERVAL_MS);
 }
 </script>
 </body>
