@@ -256,6 +256,52 @@
   @media (max-width: 760px){ .cot-grid{ grid-template-columns: 1fr; } }
 
   .footnote{ color: var(--text-faint); font-size: 11.5px; margin-top: 30px; line-height: 1.7; }
+
+  /* ---------------- Correlation matrix + Hedge tracker dialog ---------------- */
+  dialog#toolsDialog{
+    background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 22px 24px; width: min(920px, 92vw); max-height: 86vh; overflow-y: auto;
+  }
+  dialog#toolsDialog::backdrop{ background: rgba(0,0,0,.6); }
+  .tools-dialog-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom: 14px; gap: 10px; }
+  .tools-dialog-head h2{ font-size: 17px; }
+  .tools-tabs{ display:flex; gap:6px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+  .tools-tabs button{
+    background: var(--panel-2); border:1px solid var(--border); color: var(--text-muted);
+    border-radius: var(--radius); padding: 7px 14px; cursor: pointer; font-size: 13px;
+  }
+  .tools-tabs button.active{ background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
+  .tools-pane-controls{ margin-bottom: 10px; }
+  .tools-pane-controls label{ font-size: 12.5px; color: var(--text-muted); display:flex; align-items:center; gap:8px; }
+  .tools-pane-controls select{
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); padding: 6px 9px;
+  }
+  .tools-hint{ color: var(--text-faint); font-size: 12px; line-height:1.6; margin-bottom: 14px; }
+  .tools-subhead{ font-size: 13.5px; margin: 20px 0 10px; color: var(--text-muted); }
+
+  .corr-table{ width:100%; border-collapse: collapse; font-size: 12.5px; }
+  .corr-table th, .corr-table td{ padding: 7px 9px; text-align:center; border: 1px solid var(--border); }
+  .corr-table th{ color: var(--text-faint); font-weight:600; background: var(--panel-2); }
+  .corr-cell{ font-family:'IBM Plex Mono',monospace; }
+  .corr-self{ color: var(--text-faint); background: var(--panel-2); }
+  .corr-strong-pos{ background: var(--green-dim); color: var(--green); font-weight:600; }
+  .corr-strong-neg{ background: var(--blue-dim); color: var(--blue); font-weight:600; }
+  .corr-mild-neg{ background: rgba(91,155,213,.12); color: var(--blue); }
+  .corr-mid{ color: var(--text-muted); }
+
+  .hedge-form{ display:grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 18px; align-items:end; }
+  @media (max-width: 760px){ .hedge-form{ grid-template-columns: repeat(2,1fr); } }
+  .hedge-form label{ display:flex; flex-direction:column; gap:4px; font-size:12px; color: var(--text-muted); }
+  .hedge-form input, .hedge-form select{
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); padding: 7px 9px;
+  }
+  .hedge-form button{
+    background: var(--amber); color: #1a1607; border:none; border-radius: var(--radius); padding: 9px 10px; font-weight:600; cursor:pointer;
+  }
+  .hedge-exposure{ margin-bottom: 8px; line-height: 2.2; }
+  .hedge-table{ width:100%; border-collapse: collapse; font-size: 12.5px; }
+  .hedge-table th, .hedge-table td{ padding: 8px 9px; border-bottom: 1px solid var(--border); text-align:left; }
+  .hedge-table th{ color: var(--text-faint); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.02em; }
 </style>
 </head>
 <body>
@@ -309,6 +355,8 @@ const TWELVEDATA_API_KEY = "YOUR-TWELVEDATA-KEY";</pre>
       <button type="button" class="btn" id="telegramTestBtn">ส่งข้อความทดสอบ</button>
       <div class="status" id="telegramStatus"></div>
     </div>
+
+    <button type="button" class="btn" id="toolsBtn" style="margin-top:14px;width:100%;">📊 Correlation &amp; Hedge Tracker</button>
   </div>
 
   <div class="main">
@@ -327,6 +375,54 @@ const TWELVEDATA_API_KEY = "YOUR-TWELVEDATA-KEY";</pre>
     </div>
   </div>
 </div>
+
+<dialog id="toolsDialog">
+  <div class="tools-dialog-head">
+    <h2>Correlation Matrix &amp; Hedge Tracker</h2>
+    <button type="button" class="btn" id="toolsCloseBtn">ปิด ✕</button>
+  </div>
+  <div class="tools-tabs" id="toolsTabs">
+    <button type="button" class="active" data-pane="corr">สหสัมพันธ์ระหว่างสัญลักษณ์</button>
+    <button type="button" data-pane="hedge">Hedge Tracker</button>
+  </div>
+
+  <div class="tools-pane" data-pane="corr">
+    <div class="tools-pane-controls">
+      <label>Timeframe:
+        <select id="corrIntervalSelect">
+          <option value="15min">15 นาที</option>
+          <option value="1h" selected>1 ชั่วโมง</option>
+          <option value="4h">4 ชั่วโมง</option>
+          <option value="1day">1 วัน</option>
+        </select>
+      </label>
+    </div>
+    <p class="tools-hint">คำนวณจากเปอร์เซ็นต์การเปลี่ยนแปลงราคาของแท่งล่าสุดที่มีในระบบของแต่ละสัญลักษณ์ในรายการเฝ้าดู — ค่าใกล้ +1.00 หมายถึงเคลื่อนไหวไปทางเดียวกัน ค่าใกล้ -1.00 หมายถึงเคลื่อนไหวสวนทางกัน (มักใช้จับคู่ hedge ได้ดี) สัญลักษณ์ต่างตลาด/ต่างช่วงเวลาซื้อขายอาจจับคู่แท่งราคาไม่ตรงเป๊ะ ตัวเลขนี้เป็นเครื่องมือช่วยดูคร่าว ๆ เท่านั้น ไม่ใช่คำแนะนำการลงทุน</p>
+    <div id="corrMatrixWrap"></div>
+  </div>
+
+  <div class="tools-pane" data-pane="hedge" hidden>
+    <form class="hedge-form" id="hedgeForm">
+      <label>สัญลักษณ์<input id="hedgeSymbol" list="hedgeSymbolList" placeholder="เช่น XAU/USD" autocomplete="off" required></label>
+      <datalist id="hedgeSymbolList"></datalist>
+      <label>ทิศทาง<select id="hedgeSide"><option value="buy">BUY</option><option value="sell">SELL</option></select></label>
+      <label>ขนาด (lot)<input id="hedgeLotSize" type="number" step="0.01" min="0.01" required></label>
+      <label>ราคาเข้า<input id="hedgeEntryPrice" type="number" step="any" required></label>
+      <label>มูลค่าต่อหน่วยราคา/lot<input id="hedgeValuePerUnit" type="number" step="any" required></label>
+      <label>โน้ต (ไม่บังคับ)<input id="hedgeNote" type="text" placeholder="เช่น เฮดจ์คู่กับ EUR/USD"></label>
+      <button type="submit">+ บันทึกไม้ hedge</button>
+    </form>
+
+    <h3 class="tools-subhead">Net Exposure (เฉพาะไม้ที่เปิดอยู่)</h3>
+    <div id="hedgeExposureWrap" class="hedge-exposure"></div>
+
+    <h3 class="tools-subhead">ไม้ที่เปิดอยู่ + P&amp;L สด</h3>
+    <div id="hedgeOpenWrap"></div>
+
+    <h3 class="tools-subhead">ประวัติไม้ที่ปิดแล้ว</h3>
+    <div id="hedgeClosedWrap"></div>
+  </div>
+</dialog>
 
 <template id="tplDashboard">
   <div id="errorSlot"></div>
@@ -1451,6 +1547,221 @@ if(isConfigured){
       }catch(e){
         statusEl.textContent = 'ผิดพลาด: ' + e.message;
       }
+    });
+  }
+
+  // ==================================================================
+  // Correlation matrix + Hedge position tracker — cross-symbol tools, not tied to whichever
+  // symbol happens to be selected in the main view (unlike everything in tplDashboard).
+  // ==================================================================
+  function pearsonCorrelation(a, b){
+    const n = Math.min(a.length, b.length);
+    if(n < 5) return null;
+    const aa = a.slice(-n), bb = b.slice(-n);
+    const meanA = aa.reduce((s,x)=>s+x,0)/n;
+    const meanB = bb.reduce((s,x)=>s+x,0)/n;
+    let num=0, denA=0, denB=0;
+    for(let i=0;i<n;i++){
+      const da = aa[i]-meanA, db = bb[i]-meanB;
+      num += da*db; denA += da*da; denB += db*db;
+    }
+    if(denA===0 || denB===0) return null;
+    return num / Math.sqrt(denA*denB);
+  }
+
+  async function refreshCorrelationMatrix(){
+    const el = document.getElementById('corrMatrixWrap');
+    if(!el) return;
+    const symbols = state.watchlist.map(r => r.symbol);
+    if(symbols.length < 2){
+      el.innerHTML = '<div class="empty-state" style="padding:30px 0;">ต้องมีอย่างน้อย 2 สัญลักษณ์ในรายการเฝ้าดู ถึงจะคำนวณสหสัมพันธ์ได้</div>';
+      return;
+    }
+    el.innerHTML = '<div class="loading-box">กำลังคำนวณ...</div>';
+    const interval = document.getElementById('corrIntervalSelect').value || '1h';
+    try{
+      const returnsMap = {};
+      for(const sym of symbols){
+        try{
+          const bars = await getBars(sym, interval);
+          const closes = bars.map(b => b.close);
+          returnsMap[sym] = closes.slice(1).map((c,i) => (c - closes[i]) / closes[i]);
+        }catch(e){
+          console.error('ดึงข้อมูลสหสัมพันธ์ล้มเหลวสำหรับ', sym, e);
+          returnsMap[sym] = null;
+        }
+      }
+      const rows = symbols.filter(s => returnsMap[s] && returnsMap[s].length >= 5);
+      if(rows.length < 2){
+        el.innerHTML = '<div class="empty-state" style="padding:30px 0;">ข้อมูลราคาไม่พอสำหรับคำนวณ (ต้องมีข้อมูลอย่างน้อย 2 สัญลักษณ์)</div>';
+        return;
+      }
+      let html = '<table class="corr-table"><thead><tr><th></th>' + rows.map(s=>`<th>${s}</th>`).join('') + '</tr></thead><tbody>';
+      for(const rSym of rows){
+        html += `<tr><th>${rSym}</th>`;
+        for(const cSym of rows){
+          if(rSym === cSym){ html += '<td class="corr-cell corr-self">1.00</td>'; continue; }
+          const corr = pearsonCorrelation(returnsMap[rSym], returnsMap[cSym]);
+          if(corr == null){ html += '<td class="corr-cell">—</td>'; continue; }
+          let cls = 'corr-mid';
+          if(corr >= 0.7) cls = 'corr-strong-pos';
+          else if(corr <= -0.7) cls = 'corr-strong-neg';
+          else if(corr <= -0.3) cls = 'corr-mild-neg';
+          html += `<td class="corr-cell ${cls}">${corr.toFixed(2)}</td>`;
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+      el.innerHTML = html;
+    }catch(e){
+      el.innerHTML = `<div class="error-box">คำนวณไม่สำเร็จ: ${e.message}</div>`;
+    }
+  }
+
+  function populateHedgeSymbolList(){
+    const dl = document.getElementById('hedgeSymbolList');
+    if(!dl) return;
+    dl.innerHTML = state.watchlist.map(r => `<option value="${r.symbol}">`).join('');
+  }
+
+  async function refreshHedgeTracker(){
+    const openWrap = document.getElementById('hedgeOpenWrap');
+    const closedWrap = document.getElementById('hedgeClosedWrap');
+    const exposureWrap = document.getElementById('hedgeExposureWrap');
+    if(!openWrap) return;
+    openWrap.innerHTML = '<div class="loading-box">กำลังโหลด...</div>';
+    closedWrap.innerHTML = '';
+    exposureWrap.innerHTML = '';
+
+    const { data, error } = await sb.from('hedge_positions').select('*').order('opened_at', { ascending:false });
+    if(error){ openWrap.innerHTML = `<div class="error-box">โหลดไม่สำเร็จ: ${error.message}</div>`; return; }
+
+    const open = (data||[]).filter(p => !p.closed_at);
+    const closed = (data||[]).filter(p => p.closed_at);
+
+    // Net exposure per symbol — signed sum of lot sizes among open positions only.
+    const exposure = {};
+    open.forEach(p => {
+      const sign = p.side === 'buy' ? 1 : -1;
+      exposure[p.symbol] = (exposure[p.symbol]||0) + sign * Number(p.lot_size);
+    });
+    const expEntries = Object.entries(exposure);
+    exposureWrap.innerHTML = expEntries.length
+      ? expEntries.map(([sym, net]) => `<span class="badge ${net>0?'bull':net<0?'bear':'neutral'}" style="margin:2px 6px 2px 0;">${sym}: ${net>=0?'+':''}${net.toFixed(2)} lot</span>`).join('')
+      : '<span class="sub" style="color:var(--text-faint);">ยังไม่มีไม้ hedge ที่เปิดอยู่</span>';
+
+    if(!open.length){
+      openWrap.innerHTML = '<div class="empty-state" style="padding:20px 0;">ยังไม่มีไม้ hedge ที่เปิดอยู่</div>';
+    } else {
+      const uniqSymbols = [...new Set(open.map(p => p.symbol))];
+      const priceMap = {};
+      await Promise.all(uniqSymbols.map(async sym => {
+        try{
+          const bars = await getBars(sym, '1h');
+          priceMap[sym] = bars.length ? bars[bars.length-1].close : null;
+        }catch(e){ priceMap[sym] = null; }
+      }));
+
+      let html = '<table class="hedge-table"><thead><tr><th>สัญลักษณ์</th><th>ทิศทาง</th><th>Lot</th><th>ราคาเข้า</th><th>ราคาปัจจุบัน</th><th>P&amp;L</th><th>เปิดเมื่อ</th><th></th></tr></thead><tbody>';
+      let totalPnl = 0;
+      for(const p of open){
+        const cur = priceMap[p.symbol];
+        let pnl = null;
+        if(cur != null){
+          const diff = p.side === 'buy' ? (cur - p.entry_price) : (p.entry_price - cur);
+          pnl = diff * Number(p.value_per_unit) * Number(p.lot_size);
+          totalPnl += pnl;
+        }
+        html += `<tr>
+          <td>${p.symbol}${p.note ? `<div class="sub" style="color:var(--text-faint);font-size:11px;">${p.note}</div>` : ''}</td>
+          <td><span class="badge ${p.side==='buy'?'bull':'bear'}">${p.side==='buy'?'BUY':'SELL'}</span></td>
+          <td>${Number(p.lot_size).toFixed(2)}</td>
+          <td class="mono">${fmt(p.entry_price, p.entry_price<10?4:2)}</td>
+          <td class="mono">${cur!=null ? fmt(cur, cur<10?4:2) : '—'}</td>
+          <td class="mono" style="color:${pnl==null?'var(--text-faint)':pnl>=0?'var(--green)':'var(--red)'};">${pnl==null?'—':(pnl>=0?'+':'')+fmt(pnl,2)}</td>
+          <td class="sub" style="color:var(--text-faint);font-size:11.5px;">${new Date(p.opened_at).toLocaleString('th-TH')}</td>
+          <td><button type="button" class="btn" data-close-hedge="${p.id}" style="font-size:11.5px;padding:5px 9px;">ปิดไม้</button></td>
+        </tr>`;
+      }
+      html += `</tbody></table><div class="sub" style="margin-top:8px;color:var(--text-muted);">P&amp;L รวม (เฉพาะไม้ที่เปิดอยู่): <b style="color:${totalPnl>=0?'var(--green)':'var(--red)'};">${totalPnl>=0?'+':''}${fmt(totalPnl,2)}</b></div>`;
+      openWrap.innerHTML = html;
+
+      openWrap.querySelectorAll('[data-close-hedge]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.closeHedge;
+          const closePriceStr = prompt('ราคาปิด (close price) สำหรับไม้นี้:');
+          if(closePriceStr == null) return;
+          const closePrice = parseFloat(closePriceStr);
+          if(!closePrice || closePrice <= 0){ alert('ราคาปิดไม่ถูกต้อง'); return; }
+          const { error } = await sb.from('hedge_positions').update({
+            closed_at: new Date().toISOString(), close_price: closePrice,
+          }).eq('id', id);
+          if(error){ alert('ปิดไม้ไม่สำเร็จ: ' + error.message); return; }
+          await refreshHedgeTracker();
+        });
+      });
+    }
+
+    if(!closed.length){
+      closedWrap.innerHTML = '<div class="empty-state" style="padding:20px 0;">ยังไม่มีประวัติไม้ที่ปิดแล้ว</div>';
+    } else {
+      let html = '<table class="hedge-table"><thead><tr><th>สัญลักษณ์</th><th>ทิศทาง</th><th>Lot</th><th>ราคาเข้า</th><th>ราคาปิด</th><th>P&amp;L</th><th>เปิดเมื่อ</th><th>ปิดเมื่อ</th></tr></thead><tbody>';
+      let totalRealized = 0;
+      for(const p of closed){
+        const diff = p.side === 'buy' ? (p.close_price - p.entry_price) : (p.entry_price - p.close_price);
+        const pnl = diff * Number(p.value_per_unit) * Number(p.lot_size);
+        totalRealized += pnl;
+        html += `<tr>
+          <td>${p.symbol}</td>
+          <td><span class="badge ${p.side==='buy'?'bull':'bear'}">${p.side==='buy'?'BUY':'SELL'}</span></td>
+          <td>${Number(p.lot_size).toFixed(2)}</td>
+          <td class="mono">${fmt(p.entry_price, p.entry_price<10?4:2)}</td>
+          <td class="mono">${fmt(p.close_price, p.close_price<10?4:2)}</td>
+          <td class="mono" style="color:${pnl>=0?'var(--green)':'var(--red)'};">${pnl>=0?'+':''}${fmt(pnl,2)}</td>
+          <td class="sub" style="color:var(--text-faint);font-size:11.5px;">${new Date(p.opened_at).toLocaleDateString('th-TH')}</td>
+          <td class="sub" style="color:var(--text-faint);font-size:11.5px;">${new Date(p.closed_at).toLocaleDateString('th-TH')}</td>
+        </tr>`;
+      }
+      html += `</tbody></table><div class="sub" style="margin-top:8px;color:var(--text-muted);">P&amp;L รวมที่รับรู้แล้ว: <b style="color:${totalRealized>=0?'var(--green)':'var(--red)'};">${totalRealized>=0?'+':''}${fmt(totalRealized,2)}</b></div>`;
+      closedWrap.innerHTML = html;
+    }
+  }
+
+  const toolsDialog = document.getElementById('toolsDialog');
+  const toolsBtn = document.getElementById('toolsBtn');
+  if(toolsBtn && toolsDialog){
+    toolsBtn.addEventListener('click', () => {
+      populateHedgeSymbolList();
+      toolsDialog.showModal();
+      refreshCorrelationMatrix();
+      refreshHedgeTracker();
+    });
+    document.getElementById('toolsCloseBtn').addEventListener('click', () => toolsDialog.close());
+    document.querySelectorAll('#toolsTabs button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#toolsTabs button').forEach(b => b.classList.toggle('active', b===btn));
+        document.querySelectorAll('.tools-pane').forEach(p => { p.hidden = p.dataset.pane !== btn.dataset.pane; });
+      });
+    });
+    document.getElementById('corrIntervalSelect').addEventListener('change', refreshCorrelationMatrix);
+    document.getElementById('hedgeForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const symbol = document.getElementById('hedgeSymbol').value.trim().toUpperCase();
+      const side = document.getElementById('hedgeSide').value;
+      const lotSize = parseFloat(document.getElementById('hedgeLotSize').value);
+      const entryPrice = parseFloat(document.getElementById('hedgeEntryPrice').value);
+      const valuePerUnit = parseFloat(document.getElementById('hedgeValuePerUnit').value);
+      const note = document.getElementById('hedgeNote').value.trim();
+      if(!symbol || !lotSize || !entryPrice || !valuePerUnit){
+        alert('กรอกสัญลักษณ์ ขนาด lot ราคาเข้า และมูลค่าต่อหน่วยราคาให้ครบ');
+        return;
+      }
+      const { error } = await sb.from('hedge_positions').insert({
+        symbol, side, lot_size: lotSize, entry_price: entryPrice, value_per_unit: valuePerUnit, note: note || null,
+      });
+      if(error){ alert('บันทึกไม่สำเร็จ: ' + error.message); return; }
+      e.target.reset();
+      await refreshHedgeTracker();
     });
   }
 
